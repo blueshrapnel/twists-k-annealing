@@ -1,0 +1,121 @@
+\documentclass[a4paper, notitlepage, 11pt]{article}
+
+\usepackage[a4paper, left=17mm, bottom=17mm, right=35mm, top=17mm]{geometry}
+
+\input{includes-common}
+\newfontfamily\papercodeblockfont{JetBrainsMono Nerd Font}[Scale=MatchLowercase]
+\renewcommand{\codeblockfont}{\papercodeblockfont}
+
+\usepackage[backend=biber, natbib=true, style=apa]{biblatex}
+\addbibresource{refs.bib}
+
+\usepackage{float}
+
+\graphicspath{{figures/}}
+
+\title{Cheap worlds first:\\ two-stage goal-subsampling annealing for evolving action relabellings}
+\author{Karen Archer\textsuperscript{1},\, [co-authors TBC]}
+\date{DRAFT SKELETON}
+
+\makeatletter
+\renewcommand{\@maketitle}{%
+  \begin{center}
+    {\Large\bfseries \@title \par}
+    \vspace{0.75em}
+    {\normalsize \@author \par}
+    \vspace{0.5em}
+    {\small \textsuperscript{1}Adaptive Systems Group, University of Hertfordshire, Hatfield, UK \par}
+    \vspace{0.5em}
+    {\small \@date \par}
+  \end{center}
+  \vspace{1em}
+}
+\makeatother
+
+% ---------------------------------------------------------------------------
+% SKELETON.  The K-annealing methods paper: evolve at goal-subsample
+% fraction K = 0.1 (cheap, noisy fitness), then consolidate with a short
+% K = 1 tail seeded from the stage-1 population.  Source assets:
+%   [S46]   attractor-fingerprint-probe/46 -- low-K viable (3/4 seeds),
+%           elite re-eval (J) HARMFUL (1/4); adaptive-K is the next lever
+%   [S48]   .../48 -- attractor-similarity yardstick (basin/cycle Jaccard)
+%   [S49]   .../49 -- pilot VERDICT: tails 0.838/0.794/0.838 vs bars
+%           0.804/0.838; cycle Jaccard 1.00; sigma rows 84-93% identical
+%   [S50]   .../50 -- anneal visualisation (K/J schedule fork, overlay)
+%   [GSV]   goal-subsampling-validation/01-03 -- three-layer equivalence,
+%           wrap convergence, Wave-A scaling
+%   [S52]   .../52 -- z-scored anti-modularity: 15x15 K=1 g200 cohort is
+%           budget-starved (cov 0.16, zQ -8.3); anneal reaches cov 0.38 at
+%           zQ -14.8
+%   [MAN]   gridOps/vars manifests (pilot, scale stage-1s, tails, 25x25)
+% Verdict table (2026-07-08, best_mean_free in bits, lower better):
+%   four_rooms 13x13: anneal 18.478/18.560  vs g200 19.17 / g1000-warm 18.708
+%   four_rooms 15x15: anneal 21.553/21.682  vs g200 22.450-22.564
+%   helical    15x15: anneal 14.727/15.017  vs g500 15.183
+%   9x9 pilot tails:  13.177/13.214/13.230  (K=1 quality at 0.28x cost)
+%   25x25 pair: stage-1 in progress (g500, ~18 min/gen)
+% ---------------------------------------------------------------------------
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+% DRAFT
+Evolving per-state action relabellings for multi-goal navigation is
+dominated by fitness evaluation: every genome scores as one planning solve
+per goal.  We show that a two-stage schedule --- evolve on a random
+$10\%$ goal subsample, then consolidate with a short full-goal tail seeded
+from the stage-one population --- finds \emph{better} twists than
+full-goal evolution at a fraction of the cost, at every environment and
+scale tested.  At $13 \times 13$ the annealed runs beat a five-times-budget
+full-goal baseline at $28\%$ of its evaluation cost; at $15 \times 15$,
+where fixed-budget full-goal search starves, annealing recovers the homing
+structure the baselines lose.  The subsampled stage finds the same
+attractor objects, not merely comparable fitness: the consolidation tail
+inherits and completes the stage-one basins in place.  Full-goal elite
+re-evaluation, the obvious de-noising alternative, is actively harmful.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+% TODO: evaluation-cost framing; noisy-fitness GA context; the question is
+% not "does cheap search find something as good" but "does it find the
+% SAME objects" -- attractor identity, not just fitness parity.
+
+\section{Two-stage annealing}
+\label{sec:method}
+% TODO [MAN]: stage-1 K=0.1 (g800, fresh mini-batch per generation, elites
+% re-scored per batch); population handoff via genome array + provenance
+% sidecar; K=1 tail (g200) seeded from the final stage-1 population; the
+% sigma-goal cache is K-agnostic so stage-1 evaluations stay valid.
+
+\section{Pilot validation at 9x9}
+\label{sec:pilot}
+% TODO [S48, S49, S50]: quality bars met (tails 0.838/0.794/0.838 vs
+% 0.804/0.838); attractor identity -- basin Jaccard 0.89-0.95, cycle
+% Jaccard 1.00 (identical cells), dwell 1.00; sigma rows 84-93% byte-
+% identical within lineage.  Figures exist (schedule fork, basin overlay).
+
+\section{Why not de-noise the elites instead}
+\label{sec:j-harmful}
+% TODO [S46]: n=4 verdict -- plain low-K reaches the asymmetric mode 3/4;
+% adding full-goal elite re-eval drops it to 1/4.  The noise IS the
+% exploration; de-noising the elites re-anchors selection too early.
+
+\section{Annealing at scale}
+\label{sec:scale}
+% TODO: the verdict table (header comment) as the headline figure;
+% [S52] budget-starvation reading: 15x15 fixed-budget baselines drift
+% toward the random null (cov 0.16, zQ -8.3) while annealed runs sit deep
+% in the homing regime (cov 0.38, zQ -14.8).  25x25 pending.
+
+\section{Discussion}
+\label{sec:discussion}
+% TODO: adaptive-K as the next lever [S46]; relation to surrogate /
+% noisy-fitness / fitness-approximation GA literature (refs TODO); recipe
+% generality beyond twists.
+
+\printbibliography
+
+\end{document}
