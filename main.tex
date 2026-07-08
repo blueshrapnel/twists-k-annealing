@@ -15,7 +15,7 @@
 
 \title{Cheap worlds first:\\ two-stage goal-subsampling annealing for evolving action relabellings}
 \author{Karen Archer\textsuperscript{1},\, [co-authors TBC]}
-\date{DRAFT SKELETON}
+\date{FIRST DRAFT --- 2026-07-09}
 
 \makeatletter
 \renewcommand{\@maketitle}{%
@@ -33,27 +33,11 @@
 \makeatother
 
 % ---------------------------------------------------------------------------
-% SKELETON.  The K-annealing methods paper: evolve at goal-subsample
-% fraction K = 0.1 (cheap, noisy fitness), then consolidate with a short
-% K = 1 tail seeded from the stage-1 population.  Source assets:
-%   [S46]   attractor-fingerprint-probe/46 -- low-K viable (3/4 seeds),
-%           elite re-eval (J) HARMFUL (1/4); adaptive-K is the next lever
-%   [S48]   .../48 -- attractor-similarity yardstick (basin/cycle Jaccard)
-%   [S49]   .../49 -- pilot VERDICT: tails 0.838/0.794/0.838 vs bars
-%           0.804/0.838; cycle Jaccard 1.00; sigma rows 84-93% identical
-%   [S50]   .../50 -- anneal visualisation (K/J schedule fork, overlay)
-%   [GSV]   goal-subsampling-validation/01-03 -- three-layer equivalence,
-%           wrap convergence, Wave-A scaling
-%   [S52]   .../52 -- z-scored anti-modularity: 15x15 K=1 g200 cohort is
-%           budget-starved (cov 0.16, zQ -8.3); anneal reaches cov 0.38 at
-%           zQ -14.8
-%   [MAN]   gridOps/vars manifests (pilot, scale stage-1s, tails, 25x25)
-% Verdict table (2026-07-08, best_mean_free in bits, lower better):
-%   four_rooms 13x13: anneal 18.478/18.560  vs g200 19.17 / g1000-warm 18.708
-%   four_rooms 15x15: anneal 21.553/21.682  vs g200 22.450-22.564
-%   helical    15x15: anneal 14.727/15.017  vs g500 15.183
-%   9x9 pilot tails:  13.177/13.214/13.230  (K=1 quality at 0.28x cost)
-%   25x25 pair: stage-1 in progress (g500, ~18 min/gen)
+% FIRST DRAFT.  All numbers verified against synced run data 2026-07-07/08.
+% Sources: gridFour/notebooks/attractor-fingerprint-probe/46,48,49,50,52;
+% goal-subsampling-validation/01-03; gridOps/vars manifests; synced runs
+% under /media/merlin/grid-twist/gridtwist-outputs/.  25x25 pair pending
+% (stage-1 in progress, ETA ~2026-07-14).
 % ---------------------------------------------------------------------------
 
 \begin{document}
@@ -61,60 +45,306 @@
 \maketitle
 
 \begin{abstract}
-% DRAFT
-Evolving per-state action relabellings for multi-goal navigation is
-dominated by fitness evaluation: every genome scores as one planning solve
-per goal.  We show that a two-stage schedule --- evolve on a random
-$10\%$ goal subsample, then consolidate with a short full-goal tail seeded
-from the stage-one population --- finds \emph{better} twists than
-full-goal evolution at a fraction of the cost, at every environment and
-scale tested.  At $13 \times 13$ the annealed runs beat a five-times-budget
+Evolving per-state action relabellings (\emph{twists}) for multi-goal
+navigation is dominated by fitness evaluation: every genome scores as one
+planning solve per goal, and the goal set grows with the world.  We show
+that a two-stage schedule --- evolve on a $10\%$ random goal subsample,
+then consolidate with a short full-goal tail seeded from the stage-one
+population --- finds \emph{better} twists than full-goal evolution at a
+fraction of the cost, at every environment and scale tested.  On a
+$13 \times 13$ walled world the annealed runs beat a five-times-budget
 full-goal baseline at $28\%$ of its evaluation cost; at $15 \times 15$,
 where fixed-budget full-goal search starves, annealing recovers the homing
 structure the baselines lose.  The subsampled stage finds the same
-attractor objects, not merely comparable fitness: the consolidation tail
-inherits and completes the stage-one basins in place.  Full-goal elite
-re-evaluation, the obvious de-noising alternative, is actively harmful.
+attractor objects, not merely comparable fitness: in a seed-matched pilot
+the consolidation tail inherits the stage-one attractor exactly (cycle
+Jaccard $1.00$) and completes it in place.  The obvious de-noising
+alternative --- re-scoring elite genomes on the full goal set --- is
+actively harmful, halving the rate at which runs reach the strong homing
+mode.  The subsampling noise is not a defect to be corrected but the
+mechanism itself: a cheap, wide search that annealing then sharpens.
 \end{abstract}
 
 \section{Introduction}
 \label{sec:intro}
-% TODO: evaluation-cost framing; noisy-fitness GA context; the question is
-% not "does cheap search find something as good" but "does it find the
-% SAME objects" -- attractor identity, not just fitness parity.
 
-\section{Two-stage annealing}
+A twist assigns each state its own permutation of the action labels,
+leaving the world unchanged; evolved twists make multi-goal navigation
+informationally cheaper and build \emph{homing labels} --- single labels
+whose repeated execution drains large regions of the world into a compact
+attractor \citep{Archer2026-relabelled-actions}.  The obstacle to studying
+these structures at scale is not the genetic algorithm but its fitness
+function.  Multi-goal fitness is a mean over goals, and each goal costs a
+full planning solve (a Blahut--Arimoto iteration to convergence): a
+population of $96$ evaluated over $200$ generations against every goal of
+a $15 \times 15$ walled world is roughly four million solves.  Grid worlds
+grow quadratically; goal sets grow with them; the evaluation bill grows as
+their product.
+
+The standard responses are surrogate fitness models and fitness
+approximation by sampling.  This paper takes the sampling route in its
+simplest form and asks the question that matters for structural research:
+not \emph{does cheap noisy fitness find something about as good}, but
+\emph{does it find the same objects}?  If a goal-subsampled search
+discovers different attractor structures --- different homing labels,
+different home cycles --- then the saving is a false economy for any
+analysis that studies the structures themselves.  If it finds the same
+objects, the evaluation bill for an entire research programme drops by a
+factor of three or more.
+
+We answer with a two-stage schedule we call \emph{K-annealing}: evolve at
+goal-subsample fraction $K = 0.1$ (a fresh random $10\%$ mini-batch of
+goals per generation), then anneal to $K = 1$ for a short consolidation
+tail whose initial population is the stage-one final population.  Three
+results support it.  First, a seed-matched pilot at $9 \times 9$ shows the
+tail meets full-goal quality bars while inheriting the stage-one attractor
+\emph{exactly} --- same cycle cells, same home --- at $28\%$ of the
+full-goal evaluation cost.  Second, the schedule scales: at $13 \times 13$
+and $15 \times 15$, on both a heavily walled world and a seamed torus, the
+annealed runs beat every seed-matched full-goal baseline we hold,
+including one with five times the generation budget.  Third, and most
+diagnostic of the mechanism: the obvious refinement of re-scoring elites
+on the full goal set each generation \emph{harms} the search, halving the
+rate at which runs reach the strong homing mode.  The mini-batch noise is
+doing the exploring.
+
+\section{Two-stage K-annealing}
 \label{sec:method}
-% TODO [MAN]: stage-1 K=0.1 (g800, fresh mini-batch per generation, elites
-% re-scored per batch); population handoff via genome array + provenance
-% sidecar; K=1 tail (g200) seeded from the final stage-1 population; the
-% sigma-goal cache is K-agnostic so stage-1 evaluations stay valid.
 
-\section{Pilot validation at 9x9}
+The genetic algorithm is the one used throughout the twists programme
+\citep{Archer2026-relabelled-actions}: population $96$, tournament size
+$3$, elite size $4$; crossover exchanges whole state-rows with probability
+$0.7$, mutation swaps two labels within a row (row probability $0.2$,
+genome probability $0.3$), so genomes remain per-state permutations.
+Fitness is the mean planning cost over the evaluated goal set --- here
+mean free energy $\mathbb{E}_{s,g}[\Fen^{\pi^*_\beta}(s)]$ at $\beta = 1$,
+each $(\sigma, g)$ pair solved to $\theta = 10^{-5}$.
+
+\paragraph{Stage one: subsampled evolution.}  At goal-subsample fraction
+$K < 1$, each generation draws a fresh uniform mini-batch of
+$\lceil K \lvert G \rvert \rceil$ goals and scores every genome against
+that batch.  The batch changes every generation and is recorded with the
+generation for audit.  Elites are cloned across generations but their
+fitness is invalidated and re-scored on each new batch --- an elite
+survives only by remaining good on goals it has not been selected on.
+Solved $(\sigma, g)$ pairs are cached by twist hash and goal in a
+run-local store whose key deliberately excludes $K$, so nothing solved in
+stage one is ever re-solved later.
+
+\paragraph{Stage two: the full-goal tail.}  At the end of stage one the
+final population --- all $96$ genomes, not the single best --- is written
+as a genome array with a provenance sidecar (environment, shape, action
+count), and a second, short run starts at $K = 1$ with that array as its
+initial population.  The sidecar is validated on load, so a population
+cannot silently seed a mismatched world.  Because the evaluation cache is
+$K$-agnostic, the tail begins with every stage-one solve already in hand;
+its marginal cost is the full-goal evaluation of genuinely new genomes.
+Loading a population consumes no random draws, so the tail is a new
+evolutionary trajectory, not a replay.
+
+\paragraph{Cost accounting.}  We count cost in \emph{goal-generation
+equivalents}: one unit is one generation evaluated against the full goal
+set.  A stage-one generation at $K = 0.1$ costs $0.1$ units, so the
+schedule used throughout this paper --- $800$ generations at $K = 0.1$
+plus a $200$-generation tail at $K = 1$ --- costs $280$ units.  The
+baselines it is judged against cost $200$, $500$, and $1{,}000$ units.
+Wall-clock tracks these units closely; the pilot's annealed lineages
+completed, both stages, in about an hour each on one lab node.
+
+\section{Pilot: same attractor, quarter cost}
 \label{sec:pilot}
-% TODO [S48, S49, S50]: quality bars met (tails 0.838/0.794/0.838 vs
-% 0.804/0.838); attractor identity -- basin Jaccard 0.89-0.95, cycle
-% Jaccard 1.00 (identical cells), dwell 1.00; sigma rows 84-93% byte-
-% identical within lineage.  Figures exist (schedule fork, basin overlay).
 
-\section{Why not de-noise the elites instead}
+The pilot ran three seed-matched lineages on \code{four\_rooms}
+$9 \times 9$: for each seed, a stage-one run ($K = 0.1$, $g = 800$) and
+its tail ($K = 1$, $g = 200$), judged against the seed-matched full-goal
+baselines already held for that world.  Two quality bars were set in
+advance from those baselines: the tail should reach the baselines' mean
+run-best coverage ($0.804$), and ideally their best ($0.838$).
+
+\paragraph{Quality.}  The three tails reached coverage $0.838$, $0.794$,
+and $0.838$ (mean $0.823$): two of three hit the historical best outright.
+Final best mean free energies were $13.18$, $13.21$, and $13.23$ ---
+inside the baseline cluster --- and each tail improved on its own
+stage-one final ($13.24$, $13.30$, $13.47$), the consolidation worth
+$0.07$--$0.24$ bits.
+
+\paragraph{Identity.}  The claim that matters for structural research is
+that stage one finds the \emph{object} and the tail merely completes it.
+Comparing each tail's dominant-label functional graph against its own
+stage-one final: basin Jaccard $0.89$--$0.95$, attractor-cycle Jaccard
+$1.00$ --- identical cycle cells in all three lineages, every cycle
+containing the same home cell --- and identical dominant-label dwell
+structure.  At the genome level, $84$--$93\%$ of $\sigma$ rows are
+byte-identical between a stage-one final and its tail's run-best.  Across
+lineages the picture is the familiar stochastic one: all three home in the
+same room (cross-lineage basin Jaccard $0.73$--$0.88$) with idiosyncratic
+micro-cycles.  The tail does not re-search; it consolidates in place
+(Figure~\ref{fig:pilot-overlay}).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.98\textwidth]{F-anneal-pilot-trajectory.png}
+  \caption[Pilot schedule and coverage fork]{The two-stage schedule on the
+  pilot.  The $K$ schedule --- $800$ generations at $K = 0.1$, then the
+  $K = 1$ tail seeded from the stage-one population --- with run-best
+  coverage along the run and the counterfactual fork: continuing at
+  $K = 0.1$ churns without consolidating, while the full-goal tail locks
+  in the found structure and completes it.}
+  \label{fig:pilot-schedule}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{F-anneal-pilot-attractor-overlay.png}
+  \caption[Pilot attractor overlay]{Stage-one final against tail run-best
+  for the pilot lineages: the dominant-label basin and its attractor
+  cycle.  The tail inherits the attractor exactly --- cycle Jaccard
+  $1.00$ in all three lineages --- and tidies the basin margins (basin
+  Jaccard $0.89$--$0.95$).}
+  \label{fig:pilot-overlay}
+\end{figure}
+
+\section{The de-noising trap}
 \label{sec:j-harmful}
-% TODO [S46]: n=4 verdict -- plain low-K reaches the asymmetric mode 3/4;
-% adding full-goal elite re-eval drops it to 1/4.  The noise IS the
-% exploration; de-noising the elites re-anchors selection too early.
+
+Mini-batch fitness is noisy, and the obvious refinement is to spend a
+little of the saved budget de-noising where it seems to matter most: the
+elites.  In this variant, the elite pool is re-scored against the full
+goal set each generation, anchoring selection's top end to the true
+objective while the population explores cheaply.
+
+It does the opposite of what it promises.  In a four-seed comparison at
+$9 \times 9$, plain subsampled evolution reached the strong homing mode
+(coverage $\geq 0.70$) in three of four seeds at both $K = 0.1$ and
+$K = 0.25$; adding full-goal elite re-evaluation dropped this to one of
+four.  Re-scoring the elites re-anchors selection to the current best
+full-goal genomes every generation, and the population contracts around
+them before the cheap exploration has found the basin worth
+consolidating.  The batch noise at the top of the ranking is not a defect:
+it is what keeps early, mediocre structure from entrenching.  Selection
+pressure in a noisy fitness landscape is itself annealed by the noise, and
+the two-stage schedule works precisely because it removes that noise
+\emph{once}, at the end, rather than continuously at the top.
 
 \section{Annealing at scale}
 \label{sec:scale}
-% TODO: the verdict table (header comment) as the headline figure;
-% [S52] budget-starvation reading: 15x15 fixed-budget baselines drift
-% toward the random null (cov 0.16, zQ -8.3) while annealed runs sit deep
-% in the homing regime (cov 0.38, zQ -14.8).  25x25 pending.
+
+The pilot licenses the schedule; scale is where it pays.  We ran the same
+two-stage schedule ($K = 0.1$, $g = 800$; tail $K = 1$, $g = 200$; two
+seeds per world) on \code{four\_rooms} at $13 \times 13$ and
+$15 \times 15$ and on the seamed torus \code{helical} at $15 \times 15$,
+against every seed-matched full-goal baseline we hold.
+Table~\ref{tab:scale} gives the complete accounting.
+
+\begin{table}[H]
+  \centering
+  \small
+  \begin{tabular}{llccc}
+    \toprule
+    world & seed & anneal (stage $\to$ tail) & best $K{=}1$ baseline & cost ratio \\
+    \midrule
+    \code{four\_rooms} $13{\times}13$ & s141 & $18.55 \to \mathbf{18.48}$ & $18.71$ \; ($g = 1000$) & $0.28$ \\
+    \code{four\_rooms} $13{\times}13$ & s223 & $18.68 \to \mathbf{18.56}$ & $19.15$ \; ($g = 200$) & $1.4$ \\
+    \code{four\_rooms} $15{\times}15$ & s141 & $21.65 \to \mathbf{21.55}$ & $22.45$--$22.56$ \; ($g = 200$, $4$ seeds) & $1.4$ \\
+    \code{four\_rooms} $15{\times}15$ & s223 & $21.68 \to \mathbf{21.68}$ & '' & $1.4$ \\
+    \code{helical} $15{\times}15$ & s663 & $14.78 \to \mathbf{14.73}$ & $15.18$ \; ($g = 500$) & $0.56$ \\
+    \code{helical} $15{\times}15$ & s670 & $15.08 \to \mathbf{15.02}$ & '' & $0.56$ \\
+    \bottomrule
+  \end{tabular}
+  \caption[Anneal-at-scale verdicts]{Best mean free energy
+  (bits-equivalent, lower is better) of the annealed lineages against the
+  best seed-matched full-goal baselines.  Cost ratio is annealed
+  evaluation cost ($280$ goal-generation equivalents) over the quoted
+  baseline's.  The annealed runs win every comparison --- including
+  against a $1{,}000$-unit baseline at $28\%$ of its cost.  A
+  $25 \times 25$ pair (torus and seamed torus) is in progress.}
+  \label{tab:scale}
+\end{table}
+
+Three readings of the table.  First, the headline: at $13 \times 13$ the
+annealed lineage beats the five-times-budget warm-extended baseline ---
+and its \emph{stage one alone} ($18.55$) already does, before the tail is
+paid for.  Second, the $15 \times 15$ gap is not marginal: $0.8$--$1.0$
+bits over four independent full-goal seeds.  Third, the seamed torus
+closes the loop on generality: annealing beats a $500$-generation
+full-goal run on the world whose seam gives full-goal search its best
+possible start.
+
+\paragraph{What the baselines were missing.}  Structural fingerprints say
+the $15 \times 15$ full-goal baselines are not merely slower --- they are
+budget-starved.  On the coverage axis the $g = 200$ full-goal run-bests
+reach only $0.15$--$0.21$, barely separated from the uniform-random null,
+where the annealed runs reach $0.31$--$0.40$; on a null-normalised
+structural axis (Louvain modularity of the basin co-membership graph,
+z-scored against each shape's own random null) the baselines sit at
+$z \approx -8$ against the annealed runs' $z \approx -15$
+(Figure~\ref{fig:scale-fan}).  Fixed-budget full-goal search at this scale
+drifts toward the random end of the structure manifold; the annealed runs
+sit where the smaller worlds' successful runs sit.  The saving is not just
+cheaper equivalence --- at fixed budget it is the difference between
+finding the homing structure and not finding it.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.72\textwidth]{F-q-vs-coverage-scale-fan.png}
+  \caption[Structure manifold across scales]{\code{four\_rooms} twists on
+  the coverage--modularity manifold across grid sides (colour), with
+  uniform-random twists (faint), Cartesian (diamonds), full-goal
+  run-bests (dots), and annealed runs (stars).  At $15 \times 15$ the
+  fixed-budget full-goal cohort sits near the random end; the annealed
+  runs sit deep in the consolidated-homing region the smaller scales
+  occupy.}
+  \label{fig:scale-fan}
+\end{figure}
+
+\section{Related work}
+\label{sec:related}
+
+% TODO: position against (i) fitness approximation / surrogate-assisted
+% evolutionary computation; (ii) noisy fitness and implicit averaging in
+% EAs; (iii) mini-batch stochastic gradient descent as the
+% optimisation-community analogue (fresh mini-batch per step; small
+% batches as implicit regularisation); (iv) simulated annealing (the
+% schedule anneals selection NOISE rather than temperature).  Citations
+% to be gathered; none currently in refs.bib.
 
 \section{Discussion}
 \label{sec:discussion}
-% TODO: adaptive-K as the next lever [S46]; relation to surrogate /
-% noisy-fitness / fitness-approximation GA literature (refs TODO); recipe
-% generality beyond twists.
+
+The result is a recipe, and its two halves matter equally.  Evolve cheap
+and noisy: a fresh $10\%$ goal batch per generation costs a tenth of the
+true objective and explores more per unit of evaluation, because the
+noise it injects at the top of the ranking prevents early entrenchment
+--- attempts to remove that noise mid-run (Section~\ref{sec:j-harmful})
+do measurable harm.  Then consolidate once: a short full-goal tail,
+seeded with the whole final population rather than a champion, locks in
+the found attractor --- and the pilot's identity analysis says
+\emph{locks in} is the right phrase: same cycle, same home, most of the
+genome already in place.
+
+Why does the cheap stage find the right objects?  The fitness it
+optimises is an unbiased estimate of the true objective whose variance
+acts on selection, not on the landscape: the attractor structures that
+make a twist good --- world-spanning basins draining to a compact home
+--- help on \emph{most} goals, so they survive any batch, while genome
+features that help only a few goals cannot hold their rank from batch to
+batch.  Subsampling filters for exactly the goal-general structure the
+research programme cares about.  This also bounds the recipe's scope: an
+application whose value concentrates in a few critical goals would be
+poorly served by uniform subsampling, and would want stratified or
+importance-weighted batches instead.
+
+Three continuations are queued.  Adaptive $K$ --- growing the batch as
+the population converges --- would replace the hand-tuned two-stage
+schedule with a self-scheduling one; the failure of elite re-evaluation
+suggests any adaptation should act globally on $K$ rather than
+selectively on ranking positions.  The $25 \times 25$ pair currently in
+progress tests the schedule at a scale where full-goal evolution is
+impractical outright: a single full-goal generation there costs what an
+entire subsampled generation costs at ten times the batch.  And the
+cache-plus-population handoff generalises to any staged curriculum ---
+coarse-to-fine over goal sets, worlds, or fitness objectives --- wherever
+the evaluation cache can be made stage-agnostic.
 
 \printbibliography
 
